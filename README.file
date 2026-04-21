@@ -1,0 +1,470 @@
+# 🏭 Machine Details Dashboard
+
+A full-stack web application to monitor and manage machine details,
+built with FastAPI (Python), HTML/CSS/JavaScript, MySQL (Railway),
+and deployed on Vercel.
+
+---
+
+## 🎯 Full Project Flow
+
+```
+User opens Browser
+       ↓
+Frontend (HTML/CSS/JS) — Vercel
+       ↓  sends API request
+Backend (FastAPI/Python) — Vercel
+       ↓  queries database
+MySQL Database — Railway
+       ↓  returns data
+Backend sends JSON response
+       ↓
+Frontend displays data in table
+```
+
+---
+
+## 🗂️ Project Structure
+
+```
+machine-app/
+├── backend/
+│   ├── main.py          ← FastAPI app — all API routes
+│   ├── database.py      ← MySQL connection
+│   ├── requirements.txt ← Python packages
+│   └── vercel.json      ← Vercel deployment config
+├── frontend/
+│   └── index.html       ← UI — HTML + CSS + JavaScript
+└── README.md
+```
+
+---
+
+## 🗄️ Step 1: Database (MySQL on Railway)
+
+### What is Railway?
+Railway is a free cloud platform that hosts your MySQL database
+on the internet so anyone can access it from anywhere.
+
+### Table Structure
+```sql
+CREATE TABLE machines (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    machine_name VARCHAR(100) NOT NULL,
+    machine_model VARCHAR(100) NOT NULL,
+    serial_number VARCHAR(100) UNIQUE NOT NULL,
+    location     VARCHAR(100),
+    status       ENUM('Running','Stopped','Maintenance') DEFAULT 'Running',
+    ip_address   VARCHAR(50),
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+
+### Column Explanation
+
+| Column         | Type        | Meaning                                      |
+|----------------|-------------|----------------------------------------------|
+| `id`           | INT         | Unique number for each machine (auto counts) |
+| `machine_name` | VARCHAR     | Name of the machine                          |
+| `machine_model`| VARCHAR     | Model number of the machine                  |
+| `serial_number`| VARCHAR     | Unique serial number (no duplicates allowed) |
+| `location`     | VARCHAR     | Where the machine is placed                  |
+| `status`       | ENUM        | Current state: Running/Stopped/Maintenance   |
+| `ip_address`   | VARCHAR     | Network IP address of the machine            |
+| `last_updated` | TIMESTAMP   | Auto updates whenever row is changed         |
+
+### Important SQL Keywords
+
+| Keyword              | Meaning                                        |
+|----------------------|------------------------------------------------|
+| `AUTO_INCREMENT`     | id automatically increases: 1, 2, 3...        |
+| `PRIMARY KEY`        | Uniquely identifies each row                   |
+| `NOT NULL`           | Field cannot be left empty                     |
+| `UNIQUE`             | No two rows can have same value                |
+| `ENUM`               | Only allows specific predefined values         |
+| `DEFAULT`            | Uses this value if none is provided            |
+| `ON UPDATE CURRENT_TIMESTAMP` | Auto updates time when row changes  |
+
+---
+
+## ⚙️ Step 2: Backend (FastAPI on Vercel)
+
+### What is FastAPI?
+FastAPI is a Python web framework that creates API endpoints.
+Frontend calls these endpoints to get/add/delete data.
+
+### `database.py` — Database Connection
+
+```python
+import mysql.connector
+import os
+
+def get_connection():
+    try:
+        connection = mysql.connector.connect(
+            host="shinkansen.proxy.rlwy.net",  # Railway MySQL host
+            port=30624,                         # Railway MySQL port
+            user="root",                        # MySQL username
+            password="xxxxxxxxxxxxxxxxxxxxx",   # MySQL password
+            database="machine_db",              # Database name
+            connection_timeout=30,              # Wait 30s before timeout
+            ssl_disabled=True                   # Disable SSL for Railway
+        )
+        return connection
+    except Exception as e:
+        print(f"Database connection error: {e}")
+        raise e
+```
+
+#### Important Parts Explained
+
+| Part                    | Meaning                                           |
+|-------------------------|---------------------------------------------------|
+| `mysql.connector`       | Python library to talk to MySQL                   |
+| `host`                  | Address of the MySQL server (Railway URL)         |
+| `port`                  | Door number to connect (Railway uses 30624)       |
+| `user/password`         | Login credentials for MySQL                       |
+| `database`              | Which database to use inside MySQL server         |
+| `connection_timeout=30` | If no response in 30s, stop trying                |
+| `ssl_disabled=True`     | Turn off SSL encryption (needed for Railway)      |
+| `try/except`            | If connection fails, catch and show the error     |
+
+---
+
+### `main.py` — API Routes
+
+```python
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional
+from database import get_connection
+
+# Create FastAPI app
+app = FastAPI()
+
+# Root route — check if API is alive
+@app.get("/")
+def root():
+    return {"message": "Machine API is running ✅"}
+
+# CORS — allow frontend to call backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+# Machine data model
+class Machine(BaseModel):
+    machine_name: str
+    machine_model: str
+    serial_number: str
+    location: Optional[str] = None
+    status: Optional[str] = "Running"
+    ip_address: Optional[str] = None
+
+# GET all machines
+@app.get("/machines")
+def get_machines():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM machines")
+        machines = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return machines
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# POST — add new machine
+@app.post("/machines")
+def add_machine(machine: Machine):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT INTO machines
+        (machine_name, machine_model, serial_number, location, status, ip_address)
+        VALUES (%s, %s, %s, %s, %s, %s)""",
+        (machine.machine_name, machine.machine_model,
+         machine.serial_number, machine.location,
+         machine.status, machine.ip_address)
+    )
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return {"message": "Machine added successfully"}
+
+# DELETE — remove machine
+@app.delete("/machines/{machine_id}")
+def delete_machine(machine_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM machines WHERE id = %s", (machine_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    return {"message": "Machine deleted successfully"}
+```
+
+#### Important Parts Explained
+
+| Part                    | Meaning                                              |
+|-------------------------|------------------------------------------------------|
+| `FastAPI()`             | Creates the web application                          |
+| `@app.get("/machines")` | When browser visits /machines → run this function    |
+| `@app.post("/machines")`| When form submits data → run this function           |
+| `@app.delete("/machines/{id}")` | When delete clicked → run this function      |
+| `CORSMiddleware`        | Allows frontend on different URL to call this API    |
+| `allow_origins=["*"]`   | Allow requests from any website                      |
+| `BaseModel`             | Defines what data a machine must have                |
+| `Optional[str] = None`  | This field is not required — can be empty            |
+| `cursor(dictionary=True)`| Returns data as {key:value} instead of plain list   |
+| `cursor.execute()`      | Runs SQL query on database                           |
+| `fetchall()`            | Gets ALL rows from query result                      |
+| `fetchone()`            | Gets ONE row from query result                       |
+| `conn.commit()`         | Saves INSERT/DELETE changes permanently              |
+| `cursor.close()`        | Closes cursor to free memory                         |
+| `conn.close()`          | Closes database connection                           |
+| `HTTPException`         | Returns proper error response if something fails     |
+| `%s`                    | Safe placeholder to prevent SQL injection attacks    |
+
+---
+
+### `vercel.json` — Deployment Config
+
+```json
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "main.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "main.py"
+    }
+  ]
+}
+```
+
+#### Explanation
+
+| Part               | Meaning                                          |
+|--------------------|--------------------------------------------------|
+| `version: 2`       | Vercel configuration version                     |
+| `builds`           | Tell Vercel how to build the app                 |
+| `src: main.py`     | Entry point of the application                   |
+| `@vercel/python`   | Use Python runtime environment                   |
+| `routes`           | All incoming requests go to main.py              |
+| `src: "/(.*)" `    | Match any URL path                               |
+| `dest: main.py`    | Send all requests to main.py to handle           |
+
+---
+
+## 🌐 Step 3: Frontend (HTML/CSS/JS on Vercel)
+
+### Important JavaScript Parts
+
+```javascript
+const API = "https://machine-backend.vercel.app";
+
+// LOAD ALL MACHINES — runs when page opens
+async function loadMachines() {
+    const response = await fetch(`${API}/machines`);
+    const machines = await response.json();
+    const tbody = document.getElementById("machineTable");
+    tbody.innerHTML = "";
+
+    machines.forEach(m => {
+        tbody.innerHTML += `
+            <tr>
+                <td>${m.id}</td>
+                <td>${m.machine_name}</td>
+                <td>${m.status}</td>
+                <td>
+                    <button onclick="deleteMachine(${m.id})">Delete</button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+// ADD MACHINE — runs when form submitted
+async function addMachine() {
+    const data = {
+        machine_name: document.getElementById("machine_name").value,
+        machine_model: document.getElementById("machine_model").value,
+        serial_number: document.getElementById("serial_number").value,
+        location: document.getElementById("location").value,
+        status: document.getElementById("status").value,
+        ip_address: document.getElementById("ip_address").value
+    };
+
+    await fetch(`${API}/machines`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+    });
+
+    loadMachines(); // Refresh table
+}
+
+// DELETE MACHINE — runs when delete button clicked
+async function deleteMachine(id) {
+    if (!confirm("Are you sure?")) return;
+    await fetch(`${API}/machines/${id}`, { method: "DELETE" });
+    loadMachines(); // Refresh table
+}
+
+// Load machines when page first opens
+loadMachines();
+```
+
+#### Important Parts Explained
+
+| Part                    | Meaning                                              |
+|-------------------------|------------------------------------------------------|
+| `const API`             | Backend URL — all requests go here                   |
+| `async function`        | Function that waits for API response                 |
+| `await fetch()`         | Call the API and wait for result                     |
+| `response.json()`       | Convert API response to JavaScript object            |
+| `tbody.innerHTML`       | Build HTML table rows from data                      |
+| `machines.forEach()`    | Loop through each machine and create a table row     |
+| `method: "POST"`        | Tell API we are sending new data                     |
+| `method: "DELETE"`      | Tell API we want to delete data                      |
+| `JSON.stringify(data)`  | Convert JS object to JSON string for sending         |
+| `Content-Type: application/json` | Tell API we are sending JSON data         |
+| `loadMachines()`        | Refresh the table after add/delete                   |
+| `confirm()`             | Show popup asking user to confirm before delete      |
+
+---
+
+## 🔗 API Endpoints
+
+| Method | Endpoint              | What it does              |
+|--------|-----------------------|---------------------------|
+| GET    | `/`                   | Check if API is running   |
+| GET    | `/machines`           | Get all machines          |
+| GET    | `/machines/{id}`      | Get one machine by ID     |
+| POST   | `/machines`           | Add new machine           |
+| DELETE | `/machines/{id}`      | Delete machine by ID      |
+
+---
+
+## 🚀 Deployment
+
+### Backend — Vercel
+```bash
+cd backend
+vercel --prod
+```
+Live at: `https://machine-backend.vercel.app`
+
+### Frontend — Vercel
+```bash
+cd frontend
+vercel --prod
+```
+Live at: `https://machine-frontend-eight.vercel.app`
+
+### Database — Railway
+- Platform: railway.app
+- Host: `shinkansen.proxy.rlwy.net`
+- Port: `30624`
+- Database: `machine_db`
+
+---
+
+## 🔄 How Data Flows — Step by Step
+
+```
+1. User opens https://machine-frontend-eight.vercel.app
+         ↓
+2. Browser loads index.html from Vercel
+         ↓
+3. JavaScript runs loadMachines() automatically
+         ↓
+4. fetch() sends GET request to:
+   https://machine-backend.vercel.app/machines
+         ↓
+5. FastAPI receives request → calls get_machines()
+         ↓
+6. get_connection() connects to Railway MySQL
+         ↓
+7. cursor.execute("SELECT * FROM machines")
+         ↓
+8. Railway MySQL returns all machine rows
+         ↓
+9. FastAPI sends data back as JSON
+         ↓
+10. JavaScript receives JSON data
+         ↓
+11. forEach() loop builds HTML table rows
+         ↓
+12. User sees machine data in table ✅
+```
+
+---
+
+## ⚠️ Common Errors & Fixes
+
+| Error                  | Cause                          | Fix                              |
+|------------------------|--------------------------------|----------------------------------|
+| `Internal Server Error`| Wrong DB credentials           | Check database.py credentials    |
+| `404 Not Found`        | Wrong URL or missing vercel.json| Check vercel.json routes         |
+| `CORS Error`           | Frontend blocked by backend    | Add CORSMiddleware in main.py    |
+| Empty table in frontend| Wrong API URL in index.html    | Check const API = correct URL    |
+| `Connection Refused`   | Database not running           | Check Railway MySQL is active    |
+| `os.environ.get() = None` | Wrong key name used         | Use variable name not actual value|
+
+---
+
+## 📦 Python Packages Used
+
+| Package                  | Purpose                              |
+|--------------------------|--------------------------------------|
+| `fastapi`                | Web framework to build API           |
+| `uvicorn`                | Server to run FastAPI locally        |
+| `mysql-connector-python` | Connect Python to MySQL database     |
+| `pydantic`               | Validate and structure incoming data |
+
+---
+
+## 🛠️ Local Development
+
+```bash
+# Install packages
+pip install fastapi uvicorn mysql-connector-python pydantic
+
+# Run backend locally
+cd backend
+uvicorn main:app --reload
+
+# Open frontend locally
+cd frontend
+xdg-open index.html
+```
+
+---
+
+## 🌍 Live URLs
+
+| Service  | URL                                              |
+|----------|--------------------------------------------------|
+| Frontend | https://machine-frontend-eight.vercel.app        |
+| Backend  | https://machine-backend.vercel.app               |
+| API Docs | https://machine-backend.vercel.app/docs          |
+
+---
+
+## 👤 Author
+
+- **Name:** Tharan
+- **GitHub:** Tharan0307
+- **Deployed:** Vercel + Railway
