@@ -4,10 +4,6 @@ from pydantic import BaseModel
 from typing import Optional
 from database import get_connection
 
-# Add this at the top after creating app
-@app.get("/")
-def root():
-    return {"message": "Machine API is running ✅"}
 
 # Create FastAPI app
 app = FastAPI()
@@ -37,6 +33,13 @@ class Machine(BaseModel):
 # =====================
 # GET all machines
 # =====================
+
+# Add this at the top after creating app
+@app.get("/")
+def root():
+    return {"message": "Machine API is running ✅"}
+
+
 @app.get("/machines")
 def get_machines():
     conn = get_connection()
