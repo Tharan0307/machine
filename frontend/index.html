@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Machine Details</title>
+    <style>
+        /* ===== RESET & BASE ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f2f5;
+            padding: 20px;
+        }
+
+        /* ===== HEADER ===== */
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+
+        /* ===== ADD MACHINE FORM ===== */
+        .form-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .form-container h2 {
+            margin-bottom: 15px;
+            color: #444;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .form-grid input,
+        .form-grid select {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            width: 100%;
+        }
+
+        .btn-add {
+            margin-top: 15px;
+            padding: 10px 25px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .btn-add:hover { background: #45a049; }
+
+        /* ===== TABLE ===== */
+        .table-container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: #2c3e50;
+            color: white;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        tr:hover { background: #f5f5f5; }
+
+        /* ===== STATUS BADGES ===== */
+        .badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .badge.Running { background: #d4edda; color: #155724; }
+        .badge.Stopped { background: #f8d7da; color: #721c24; }
+        .badge.Maintenance { background: #fff3cd; color: #856404; }
+
+        /* ===== DELETE BUTTON ===== */
+        .btn-delete {
+            padding: 5px 12px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .btn-delete:hover { background: #c0392b; }
+
+        /* ===== MESSAGE ===== */
+        .message {
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+            display: none;
+        }
+
+        .message.success { background: #d4edda; color: #155724; display: block; }
+        .message.error { background: #f8d7da; color: #721c24; display: block; }
+    </style>
+</head>
+<body>
+
+    <h1>🏭 Machine Details Dashboard</h1>
+
+    <!-- Message Box -->
+    <div id="message" class="message"></div>
+
+    <!-- Add Machine Form -->
+    <div class="form-container">
+        <h2>➕ Add New Machine</h2>
+        <div class="form-grid">
+            <input type="text" id="machine_name" placeholder="Machine Name" />
+            <input type="text" id="machine_model" placeholder="Machine Model" />
+            <input type="text" id="serial_number" placeholder="Serial Number" />
+            <input type="text" id="location" placeholder="Location" />
+            <input type="text" id="ip_address" placeholder="IP Address" />
+            <select id="status">
+                <option value="Running">Running</option>
+                <option value="Stopped">Stopped</option>
+                <option value="Maintenance">Maintenance</option>
+            </select>
+        </div>
+        <button class="btn-add" onclick="addMachine()">Add Machine</button>
+    </div>
+
+    <!-- Machine Table -->
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Machine Name</th>
+                    <th>Model</th>
+                    <th>Serial Number</th>
+                    <th>Location</th>
+                    <th>Status</th>
+                    <th>IP Address</th>
+                    <th>Last Updated</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="machineTable">
+                <!-- Data loads here -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const API = "http://127.0.0.1:8000";
+
+        // ===== LOAD ALL MACHINES =====
+        async function loadMachines() {
+            const response = await fetch(`${API}/machines`);
+            const machines = await response.json();
+            const tbody = document.getElementById("machineTable");
+            tbody.innerHTML = "";
+
+            machines.forEach(m => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${m.id}</td>
+                        <td>${m.machine_name}</td>
+                        <td>${m.machine_model}</td>
+                        <td>${m.serial_number}</td>
+                        <td>${m.location}</td>
+                        <td><span class="badge ${m.status}">${m.status}</span></td>
+                        <td>${m.ip_address}</td>
+                        <td>${m.last_updated}</td>
+                        <td>
+                            <button class="btn-delete" 
+                            onclick="deleteMachine(${m.id})">Delete</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        // ===== ADD MACHINE =====
+        async function addMachine() {
+            const data = {
+                machine_name: document.getElementById("machine_name").value,
+                machine_model: document.getElementById("machine_model").value,
+                serial_number: document.getElementById("serial_number").value,
+                location: document.getElementById("location").value,
+                status: document.getElementById("status").value,
+                ip_address: document.getElementById("ip_address").value
+            };
+
+            const response = await fetch(`${API}/machines`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            showMessage(result.message, "success");
+            loadMachines();
+        }
+
+        // ===== DELETE MACHINE =====
+        async function deleteMachine(id) {
+            if (!confirm("Are you sure you want to delete this machine?")) return;
+
+            const response = await fetch(`${API}/machines/${id}`, {
+                method: "DELETE"
+            });
+
+            const result = await response.json();
+            showMessage(result.message, "success");
+            loadMachines();
+        }
+
+        // ===== SHOW MESSAGE =====
+        function showMessage(msg, type) {
+            const el = document.getElementById("message");
+            el.textContent = msg;
+            el.className = `message ${type}`;
+            setTimeout(() => el.className = "message", 3000);
+        }
+
+        // Load machines on page open
+        loadMachines();
+    </script>
+
+</body>
+</html>
