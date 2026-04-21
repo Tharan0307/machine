@@ -8,6 +8,11 @@ from database import get_connection
 # Create FastAPI app
 app = FastAPI()
 
+# ===== ADD THIS ROOT ROUTE HERE ✅ =====
+@app.get("/")
+def root():
+    return {"message": "Machine API is running ✅"}
+
 # =====================
 # CORS — Allow frontend
 # to talk to backend
@@ -33,13 +38,6 @@ class Machine(BaseModel):
 # =====================
 # GET all machines
 # =====================
-
-# Add this at the top after creating app
-@app.get("/")
-def root():
-    return {"message": "Machine API is running ✅"}
-
-
 @app.get("/machines")
 def get_machines():
     conn = get_connection()
