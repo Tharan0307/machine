@@ -1,11 +1,12 @@
 import mysql.connector
+import os
 
-# Database connection config
 def get_connection():
     connection = mysql.connector.connect(
-        host="localhost",        # MySQL server host
-        user="root",             # MySQL username
-        password="Tharan@2004", # ← Change this to your MySQL password
-        database="machine_db"   # Database name
+        host=os.environ.get("shinkansen.proxy.rlwy.net"),
+        user=os.environ.get("root"),
+        password=os.environ.get("lKbGJmmzVgOmDcTQlOceqXdNEsVrCKJb"),
+        database=os.environ.get("machine_db"),
+        port=int(os.environ.get("DB_PORT", 30624))
     )
     return connection
